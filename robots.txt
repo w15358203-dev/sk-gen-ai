@@ -1,3 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://skgenai.github.io/sk-gen-ai/sitemap.xml
