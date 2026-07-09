@@ -122,11 +122,20 @@ nav .container{display:flex;align-items:center;justify-content:space-between}
 .ttab.on::after{content:'';position:absolute;bottom:0;left:20%;right:20%;height:2px;background:var(--g1);border-radius:2px}
 .ttab:hover:not(.on){color:var(--t);background:rgba(124,58,237,.05)}
 .tbody{padding:32px}
-.uzone{border:2px dashed rgba(124,58,237,.35);border-radius:16px;padding:48px 24px;text-align:center;cursor:pointer;transition:border-color .3s,background .3s}
+.uzone{border:2px dashed rgba(124,58,237,.35);border-radius:16px;padding:48px 24px;text-align:center;cursor:pointer;transition:border-color .3s,background .3s;position:relative}
 .uzone.blue{border-color:rgba(56,189,248,.35)}
 .uzone:hover{border-color:var(--p);background:rgba(124,58,237,.06)}
 .uzone.blue:hover{border-color:var(--a2);background:rgba(56,189,248,.06)}
 .uzone.over{border-color:var(--a);background:rgba(244,114,182,.08)}
+.uzone.has-file{border-style:solid;border-color:rgba(52,211,153,.5);background:rgba(52,211,153,.05)}
+.uzone .preview-img{max-width:100%;max-height:200px;border-radius:12px;margin:12px auto;display:none;object-fit:contain}
+.uzone .preview-vid{max-width:100%;max-height:200px;border-radius:12px;margin:12px auto;display:none}
+.uzone .file-info{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:8px}
+.uzone .file-info .fname{font-size:14px;color:var(--a3);font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uzone .file-info .fsize{font-size:12px;color:var(--tm);padding:2px 8px;background:rgba(52,211,153,.1);border-radius:6px}
+.uzone .remove-btn{display:none;position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:50%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--rd);font-size:16px;cursor:pointer;transition:background .2s}
+.uzone .remove-btn:hover{background:rgba(239,68,68,.3)}
+.uzone.has-file .remove-btn{display:flex;align-items:center;justify-content:center}
 .uicon{width:64px;height:64px;margin:0 auto 16px;background:rgba(124,58,237,.12);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px}
 .uicon.blue{background:rgba(56,189,248,.12)}
 .uzone h3{font-size:18px;font-weight:600;margin-bottom:8px}
@@ -991,8 +1000,72 @@ function handleUploadFile(file, zoneId, mediaType) {
     const key = zoneId === 'uz-home' ? 'home' : mediaType;
     currentFiles[key] = file;
     const zone = document.getElementById(zoneId);
-    zone.querySelector('h3').textContent = file.name;
-    zone.querySelector('p').textContent = `Selected · ${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+    const icon = zone.querySelector('.uicon');
+    const h3 = zone.querySelector('h3');
+    const p = zone.querySelector('p');
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+
+    // Add has-file class
+    zone.classList.add('has-file');
+
+    // Show remove button
+    let removeBtn = zone.querySelector('.remove-btn');
+    if (!removeBtn) {
+        removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.textContent = '✕';
+        removeBtn.onclick = (e) => {
+            e.stopPropagation();
+            currentFiles[key] = null;
+            zone.classList.remove('has-file');
+            // Reset to original state
+            const prevImg = zone.querySelector('.preview-img');
+            const prevVid = zone.querySelector('.preview-vid');
+            if (prevImg) { prevImg.style.display = 'none'; prevImg.src = ''; }
+            if (prevVid) { prevVid.style.display = 'none'; prevVid.src = ''; }
+            if (icon) icon.style.display = '';
+            h3.textContent = zoneId === 'uz-home' ? 'Drag & drop your file here' : (mediaType === 'video' ? 'Drag & drop your video here' : 'Drag & drop your image here');
+            p.textContent = mediaType === 'video' ? 'or click to browse — Supports MP4, AVI, MOV, WEBM' : 'or click to browse — Supports JPG, PNG, WEBP, GIF, BMP';
+        };
+        zone.appendChild(removeBtn);
+    }
+
+    // Create preview elements if they don't exist
+    let prevImg = zone.querySelector('.preview-img');
+    let prevVid = zone.querySelector('.preview-vid');
+    if (!prevImg) {
+        prevImg = document.createElement('img');
+        prevImg.className = 'preview-img';
+        zone.insertBefore(prevImg, icon);
+    }
+    if (!prevVid) {
+        prevVid = document.createElement('video');
+        prevVid.className = 'preview-vid';
+        prevVid.muted = true;
+        zone.insertBefore(prevVid, icon);
+    }
+
+    // Show preview based on file type
+    if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            prevImg.src = e.target.result;
+            prevImg.style.display = 'block';
+            prevVid.style.display = 'none';
+        };
+        reader.readAsDataURL(file);
+        if (icon) icon.style.display = 'none';
+    } else if (file.type.startsWith('video/')) {
+        const url = URL.createObjectURL(file);
+        prevVid.src = url;
+        prevVid.style.display = 'block';
+        prevImg.style.display = 'none';
+        prevVid.onloadeddata = () => { prevVid.currentTime = 1; };
+        if (icon) icon.style.display = 'none';
+    }
+
+    h3.textContent = file.name.length > 30 ? file.name.substring(0, 27) + '...' : file.name;
+    p.innerHTML = `<span style="color:var(--a3)">✓ File selected</span> · ${sizeMB} MB`;
 }
 
 setupUploadZone('uz-home', 'video');
@@ -1059,8 +1132,23 @@ async function urlToB64(url) {
     });
 }
 
-// ─── Backend URL (change this after deploying backend) ───
-const BACKEND_URL = ''; // e.g. 'https://skgenai-backend.onrender.com' — leave empty for same-domain
+// ─── Gemini API (Direct — No Backend Needed) ───
+const GEMINI_KEY = 'AQ.Ab8RN6LJv47D7oLXYRfvL-RuJEagE-h2eLvvwSvyPIZedyk_NA';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=';
+
+async function callGemini(parts) {
+    const res = await fetch(GEMINI_URL + GEMINI_KEY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts }] })
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || `API error ${res.status}`);
+    }
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No prompt generated.';
+}
 
 // ─── Generate Prompt (Real AI) ───
 async function genPrompt(key) {
@@ -1077,72 +1165,111 @@ async function genPrompt(key) {
     const origH3 = zone.querySelector('h3').textContent;
 
     try {
-        // Try real API first
-        const statusRes = await fetch(BACKEND_URL + '/api/status').catch(() => null);
-        if (statusRes) {
-            const status = await statusRes.json();
-            if (status.configured) {
-                let imageData = null, frames = null;
+        // ─── Step 1: Get image data ───
+        let imageData = null, frames = null;
 
-                if (file) {
-                    zone.querySelector('h3').textContent = `Processing ${mediaType}...`;
-                    if (mediaType === 'video') {
-                        zone.querySelector('h3').textContent = 'Extracting video frames...';
-                        frames = await extractFrames(file, 4);
-                        zone.querySelector('h3').textContent = `Analyzing with ${status.providerName}...`;
-                    } else {
-                        imageData = await resizeImg(file);
-                        zone.querySelector('h3').textContent = `Analyzing with ${status.providerName}...`;
-                    }
-                } else if (url) {
-                    zone.querySelector('h3').textContent = 'Fetching media from URL...';
-                    try { imageData = await urlToB64(url); } catch (e) { /* server will try */ }
-                    zone.querySelector('h3').textContent = `Analyzing with ${status.providerName}...`;
-                }
-
-                const formData = new FormData();
-                if (imageData) formData.append('imageData', imageData);
-                if (frames) formData.append('frames', JSON.stringify(frames));
-                if (url && !imageData && !frames) formData.append('url', url);
-                formData.append('type', mediaType);
-
-                const response = await fetch(BACKEND_URL + '/api/generate-prompt', { method: 'POST', body: formData });
-                const data = await response.json();
-
-                if (response.ok && data.prompt) {
-                    loader.style.display = 'none';
-                    zone.querySelector('h3').textContent = origH3;
-                    document.getElementById('resultTxt').textContent = data.prompt;
-                    document.getElementById('modal').classList.add('show');
-                    return;
-                }
-                if (!response.ok && data.setupRequired) {
-                    throw new Error('setup');
-                }
-                throw new Error(data.error || 'Failed');
+        if (file) {
+            if (mediaType === 'video') {
+                zone.querySelector('h3').textContent = 'Extracting video frames...';
+                frames = await extractFrames(file, 4);
+            } else {
+                imageData = await resizeImg(file);
             }
+        } else if (url) {
+            zone.querySelector('h3').textContent = 'Fetching media from URL...';
+            try { imageData = await urlToB64(url); } catch (e) { /* continue */ }
         }
-        throw new Error('no-server');
+
+        // ─── Step 2: Call Gemini API directly ───
+        zone.querySelector('h3').textContent = 'Analyzing with Google Gemini AI...';
+
+        let result = '';
+
+        if (mediaType === 'video' && frames && frames.length > 0) {
+            // Send video frames to Gemini
+            const frameParts = frames.map(f => ({
+                inlineData: { mimeType: 'image/jpeg', data: f.split(',')[1] }
+            }));
+            frameParts.unshift({ text: 'Analyze these frames extracted from a video. Generate a detailed, production-ready AI prompt that describes the video content including: scene composition, camera angles and movement, lighting, colors, mood, atmosphere, subjects, and style. The prompt should be usable in AI video generation tools like Runway, Kling AI, or Sora. Write only the prompt, no introduction:\n\nFrame 1 (start) → Frame 2 → Frame 3 → Frame 4 (end):' });
+            result = await callGemini(frameParts);
+
+        } else if (imageData) {
+            // Send image to Gemini
+            const base64 = imageData.split(',')[1];
+            const mimeMatch = imageData.match(/data:(.*?);/);
+            const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+
+            result = await callGemini([
+                { text: 'Analyze this image in detail and generate a production-ready AI prompt that could recreate it. Include: subject description, composition, lighting, color palette, mood, artistic style, camera angle, and technical details. The prompt should work in Midjourney, DALL·E 3, or Stable Diffusion. Write only the prompt, no introduction:' },
+                { inlineData: { mimeType, data: base64 } }
+            ]);
+
+        } else {
+            // URL only — describe what kind of prompt to generate
+            result = await callGemini([
+                { text: `Generate a detailed AI prompt for a ${mediaType} with this URL: ${url}. Since I cannot fetch the media, generate a prompt that describes common ${mediaType} content. Write only the prompt, no introduction.` }
+            ]);
+        }
+
+        // ─── Step 3: Show result ───
+        loader.style.display = 'none';
+        zone.querySelector('h3').textContent = origH3;
+        document.getElementById('resultTxt').textContent = result.trim();
+        document.getElementById('modal').classList.add('show');
+        return;
+
     } catch (e) {
-        // Fallback: demo prompts if server not available
-        console.log('Using demo mode:', e.message);
+        console.log('Gemini API error:', e.message);
+
+        // If rate limited (429), show friendly message
+        if (e.message.includes('429') || e.message.includes('quota') || e.message.includes('rate')) {
+            loader.style.display = 'none';
+            zone.querySelector('h3').textContent = origH3;
+            document.getElementById('resultTxt').textContent = '⏳ API rate limit reached. Please wait 30-60 seconds and try again. The free Gemini tier has daily request limits.';
+            document.getElementById('modal').classList.add('show');
+            return;
+        }
+
+        // Fallback: demo prompts if API fails
         const isVideo = mediaType === 'video';
         const vp = [
             "A cinematic drone shot sweeping over a misty mountain range at golden hour, volumetric light rays piercing through clouds, camera slowly descending toward a crystal-clear alpine lake reflecting snow-capped peaks. The atmosphere is ethereal and serene, with gentle wind rustling through pine trees. 4K, cinematic color grading, anamorphic lens flare.",
-            "Close-up tracking shot of a woman walking through a neon-lit Tokyo alleyway at night, rain-slicked pavement reflecting vibrant pink and blue signs. Camera follows from behind at medium distance, shallow depth of field. Cyberpunk aesthetic, wet surfaces glistening, steam rising from vents. Moody, atmospheric, 24fps cinematic motion."
+            "Close-up tracking shot of a woman walking through a neon-lit Tokyo alleyway at night, rain-slicked pavement reflecting vibrant pink and blue signs. Camera follows from behind at medium distance, shallow depth of field. Cyberpunk aesthetic, wet surfaces glistening, steam rising from vents. Moody, atmospheric, 24fps cinematic motion.",
+            "Slow-motion macro shot of dewdrops forming on a spider web at sunrise, each droplet refracting rainbow light. Camera slowly racks focus from foreground web to blurred garden background. Gentle bokeh, ultra-sharp detail on water droplets, 120fps slow motion, nature documentary style.",
+            "Wide aerial establishing shot of a futuristic city skyline at dusk, flying vehicles weaving between towering glass skyscrapers. Holographic billboards cast colorful light across cloud layers below. Camera does a slow 180-degree orbit. Sci-fi aesthetic, 4K, volumetric fog, lens flares from city lights.",
+            "Handheld POV shot walking through an ancient temple in Southeast Asia, sunlight streaming through carved stone doorways, dust particles floating in golden beams. Camera gently bobs with walking motion. Warm color temperature, film grain, intimate documentary feel, natural ambient sound.",
+            "Dramatic low-angle tracking shot of a samurai warrior standing in a field of tall grass, wind blowing cherry blossom petals across the frame. Lightning flashes illuminate storm clouds behind. Camera slowly dollies backward. Epic cinematic composition, high contrast, desaturated color palette with red accent.",
+            "Underwater tracking shot following a sea turtle gliding over a vibrant coral reef, schools of tropical fish scattering as it passes. Sunbeams penetrate the turquoise water creating dancing light patterns on the ocean floor. Crystal clear visibility, 4K, fluid camera movement, nature documentary quality.",
+            "Time-lapse shot of a desert landscape transitioning from day to night, shadows sweeping across sand dunes as the sun sets. Milky Way gradually appears in the darkening sky, stars rotating overhead. Camera remains locked on a wide composition. Astrophotography, 8K resolution, smooth 24-hour transition compressed to 10 seconds."
         ];
         const ip = [
             "A hyperrealistic portrait of a woman with flowing silver hair standing in a bioluminescent forest, ethereal blue and purple light casting dramatic shadows on her face. Depth of field with bokeh light particles in the background. Fantasy art style, 8K detail, studio lighting quality.",
-            "A steampunk clockwork city at sunset, intricate brass gears and copper pipes forming towering architecture. Airships float between buildings, warm golden light reflecting off metal surfaces. Detailed mechanical elements, Victorian aesthetic mixed with industrial design. Cinematic composition."
+            "A steampunk clockwork city at sunset, intricate brass gears and copper pipes forming towering architecture. Airships float between buildings, warm golden light reflecting off metal surfaces. Detailed mechanical elements, Victorian aesthetic mixed with industrial design. Cinematic composition.",
+            "A cozy Japanese ramen shop interior at night, steam rising from bowls of ramen on a wooden counter. Warm paper lanterns casting soft orange light, rain visible through the window. Manga-inspired illustration style, detailed food textures, intimate atmosphere, 4K.",
+            "An astronaut floating in deep space near a nebula, visor reflecting the cosmic colors of purple, blue, and pink gas clouds. Earth visible as a small blue dot in the distance. Photorealistic, dramatic lighting from the nebula, ultra-detailed spacesuit, IMAX quality, 8K.",
+            "A medieval castle perched on a cliff edge during a thunderstorm, lightning illuminating the dark stone walls. Waves crashing below, fog rolling through the valley. Fantasy illustration, dramatic chiaroscuro lighting, epic scale, dark moody atmosphere, highly detailed architecture.",
+            "A minimalist Scandinavian living room with floor-to-ceiling windows overlooking a snowy forest. White furniture, warm woolen textures, a crackling fireplace. Soft natural light filtering through frost on the windows. Interior design photography, 8K, warm and inviting atmosphere.",
+            "A vibrant street market in Marrakech, colorful spice pyramids in foreground, vendors in traditional clothing, intricate mosaic tiles on walls. Golden hour light casting long shadows, rich saturated colors of saffron, paprika, and turmeric. Travel photography style, 4K, immersive composition.",
+            "A surreal dreamscape where a giant whale floats through cotton candy clouds above an inverted city. Pastel pink, lavender, and mint green color palette. Magical realism art style, detailed architectural elements reflecting in the sky, ethereal lighting, whimsical and fantastical atmosphere, 8K."
         ];
+
+        const lastPromptKey = 'lastPrompt_' + mediaType;
+        const lastPrompt = localStorage.getItem(lastPromptKey) || '';
+        const prompts = isVideo ? vp : ip;
+        let chosen;
+        let attempts = 0;
+        do {
+            chosen = prompts[Math.floor(Math.random() * prompts.length)];
+            attempts++;
+        } while (chosen === lastPrompt && attempts < 5);
+        localStorage.setItem(lastPromptKey, chosen);
 
         setTimeout(() => {
             loader.style.display = 'none';
             zone.querySelector('h3').textContent = origH3;
-            const prompts = isVideo ? vp : ip;
-            document.getElementById('resultTxt').textContent = prompts[Math.floor(Math.random() * prompts.length)];
+            document.getElementById('resultTxt').textContent = '⚠️ AI API is temporarily unavailable. Showing a sample prompt instead:\n\n' + chosen;
             document.getElementById('modal').classList.add('show');
-        }, 1500);
+        }, 1000);
     }
 }
 
